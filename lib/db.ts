@@ -1,4 +1,8 @@
-import { sql } from "@vercel/postgres";
+import { createClient } from "@vercel/postgres";
+
+const db = createClient({
+  connectionString: process.env.POSTGRES_URL,
+});
 
 export interface DailyStats {
   id: number;
@@ -13,12 +17,10 @@ export async function getDailyStats() {
     // Try to initialize table first if it doesn't exist
     await initDatabase();
 
-    const { rows } = await sql<DailyStats>`
-      SELECT id, date, transactions, impressions, revenue
-      FROM daily_stats
-      ORDER BY date ASC
-    `;
-    return rows;
+    const result = await db.query(
+      "SELECT id, date, transactions, impressions, revenue FROM daily_stats ORDER BY date ASC"
+    );
+    return result.rows as DailyStats[];
   } catch (error) {
     console.error("Error fetching daily stats:", error);
     // If table doesn't exist or connection fails, return empty array for graceful handling
@@ -33,7 +35,7 @@ export async function getDailyStats() {
 export async function initDatabase() {
   try {
     // Create table if it doesn't exist
-    await sql`
+    await db.query(`
       CREATE TABLE IF NOT EXISTS daily_stats (
         id SERIAL PRIMARY KEY,
         date DATE UNIQUE NOT NULL,
@@ -41,7 +43,7 @@ export async function initDatabase() {
         impressions INTEGER NOT NULL DEFAULT 0,
         revenue DECIMAL(10, 2) NOT NULL DEFAULT 0
       )
-    `;
+    `);
     console.log("Database table initialized");
   } catch (error) {
     console.error("Error initializing database:", error);

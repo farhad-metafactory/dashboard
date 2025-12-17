@@ -1,11 +1,16 @@
-const { sql } = require('@vercel/postgres');
+const { createClient } = require('@vercel/postgres');
+require('dotenv').config({ path: '.env.local' });
+
+const db = createClient({
+  connectionString: process.env.POSTGRES_URL,
+});
 
 async function seed() {
   try {
     console.log('Creating table if it doesn\'t exist...');
     
     // Create table
-    await sql`
+    await db.query(`
       CREATE TABLE IF NOT EXISTS daily_stats (
         id SERIAL PRIMARY KEY,
         date DATE UNIQUE NOT NULL,
@@ -13,12 +18,12 @@ async function seed() {
         impressions INTEGER NOT NULL DEFAULT 0,
         revenue DECIMAL(10, 2) NOT NULL DEFAULT 0
       )
-    `;
+    `);
 
     console.log('Table created/verified');
 
     // Clear existing data
-    await sql`DELETE FROM daily_stats`;
+    await db.query('DELETE FROM daily_stats');
     console.log('Cleared existing data');
 
     // Generate sample data for the last 30 days
@@ -58,14 +63,15 @@ async function seed() {
     
     // Insert data
     for (const data of sampleData) {
-      await sql`
-        INSERT INTO daily_stats (date, transactions, impressions, revenue)
-        VALUES (${data.date}, ${data.transactions}, ${data.impressions}, ${data.revenue})
-        ON CONFLICT (date) DO UPDATE SET
-          transactions = EXCLUDED.transactions,
-          impressions = EXCLUDED.impressions,
-          revenue = EXCLUDED.revenue
-      `;
+      await db.query(
+        `INSERT INTO daily_stats (date, transactions, impressions, revenue)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (date) DO UPDATE SET
+           transactions = EXCLUDED.transactions,
+           impressions = EXCLUDED.impressions,
+           revenue = EXCLUDED.revenue`,
+        [data.date, data.transactions, data.impressions, data.revenue]
+      );
     }
 
     console.log(`Successfully seeded ${sampleData.length} days of sample data!`);
@@ -74,6 +80,8 @@ async function seed() {
   } catch (error) {
     console.error('Error seeding database:', error);
     process.exit(1);
+  } finally {
+    await db.end();
   }
 }
 
